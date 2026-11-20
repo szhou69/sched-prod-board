@@ -13,12 +13,13 @@ what just broke and takes it.
 
 ## Requirements
 
-- **R1** New incidents appear live at the top of the list, newest first.
+- **R1** The list holds still while it is on screen: a refresh never moves, re-orders or removes a row. Newest first. *(changed after product's answer to the step-1 report; was: new incidents appear live at the top)*
 - **R2** Each incident row has an **Ack** button. Ack sends the ack (`api.ack(id)`) and marks the row acked.
 - **R3** Show a loader until incidents load.
 - **R4** The board refreshes itself every 2 seconds while open.
 - **R5** Times show in the viewer's local time; day before month for EU locales (dd/mm).
 - **R6** The page names its build: `<meta name="build" content="<git sha>">` in the head and the same sha in the footer.
+- **R7** New incidents wait behind a "N new" bar above the list (fixed slot, so it never moves the rows). One click on the bar brings them in at the top, newest first. Ack stays on the row, one click, no confirm.
 
 ## Hooks (pinned — tests and the replay rely on them)
 
@@ -26,6 +27,7 @@ what just broke and takes it.
 |---------------|---------|
 | `board` | the board's main area |
 | `loader` | the loader (gone once incidents load) |
+| `new-bar` | the "N new" bar; click brings new incidents in at the top |
 | `empty` | what shows when there are no incidents |
 | `incident-list` | the list |
 | `incident-row` | one incident row, with `data-id="<incident id>"` |

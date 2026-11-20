@@ -6,9 +6,12 @@ const board = document.querySelector('[data-testid="board"]');
 const list = document.querySelector('[data-testid="incident-list"]');
 const loader = document.querySelector('[data-testid="loader"]');
 const empty = document.querySelector('[data-testid="empty"]');
+const newBar = document.querySelector('[data-testid="new-bar"]');
 
-/** id -> row element. Rows are kept, not rebuilt, so ack state and focus survive a refresh. */
+/** id -> row element. Rows on screen are never moved or removed by a refresh (R1). */
 const rows = new Map();
+/** Incidents that arrived after the list was shown, newest first, waiting behind the "N new" bar (R7). */
+let pending = [];
 /** ids acked in this session (R2). */
 const acked = new Set();
 
@@ -49,7 +52,7 @@ function setAckCell(li, id) {
     li.classList.add('is-acked');
     cell.append(el('span', { 'data-testid': 'acked', class: 'acked' }, '✓ acked'));
   } else {
-    const btn = el('button', { 'data-testid': 'ack', type: 'button' }, 'Ack');
+    const btn = el('button', { 'data-testid': 'ack', type: 'button', 'aria-label': `Ack ${id}` }, 'Ack');
     btn.addEventListener('click', () => onAck(li, id, btn));
     cell.append(btn);
   }
@@ -67,36 +70,56 @@ async function onAck(li, id, btn) {
   }
 }
 
-// R1: newest first; new incidents go on top; existing rows stay as they are.
-function render(incidents) {
-  const seen = new Set();
-  let prev = null;
+/** Puts incidents (newest first) on top of the list, above the rows already there. */
+function prepend(incidents) {
+  const first = list.firstChild;
   for (const i of incidents) {
-    seen.add(i.id);
-    let li = rows.get(i.id);
-    if (!li) {
-      li = makeRow(i);
-      rows.set(i.id, li);
-    }
-    const want = prev ? prev.nextSibling : list.firstChild;
-    if (want !== li) list.insertBefore(li, want);
-    prev = li;
+    const li = makeRow(i);
+    rows.set(i.id, li);
+    list.insertBefore(li, first);
   }
-  for (const [id, li] of rows) {
-    if (!seen.has(id)) {
-      li.remove();
-      rows.delete(id);
-    }
+  syncEmpty();
+}
+
+function syncEmpty() {
+  const none = rows.size === 0;
+  empty.hidden = !none;
+  list.hidden = none;
+}
+
+function syncBar() {
+  const n = pending.length;
+  newBar.hidden = n === 0;
+  newBar.textContent = n === 1 ? '1 new incident · show' : `${n} new incidents · show`;
+}
+
+// R7: new incidents wait behind the bar; one click brings them in on top. Rows on screen hold still.
+newBar.addEventListener('click', () => {
+  const incoming = pending;
+  pending = [];
+  syncBar();
+  prepend(incoming);
+});
+
+function take(page) {
+  if (rows.size === 0 && pending.length === 0) {
+    // First answer with incidents (or none yet): show them as the list.
+    prepend(page.incidents);
+    return;
   }
-  empty.hidden = incidents.length > 0;
-  list.hidden = incidents.length === 0;
+  const known = new Set([...rows.keys(), ...pending.map((i) => i.id)]);
+  const fresh = page.incidents.filter((i) => !known.has(i.id));
+  if (fresh.length) {
+    pending = [...fresh, ...pending];
+    syncBar();
+  }
 }
 
 let loaded = false;
 async function tick() {
   try {
     const page = await fetchIncidents();
-    render(page.incidents);
+    take(page);
     if (!loaded) {
       loaded = true;
       loader.remove(); // R3: gone once incidents load
